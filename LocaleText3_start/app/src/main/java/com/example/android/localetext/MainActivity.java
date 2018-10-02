@@ -23,6 +23,7 @@ import android.provider.Settings;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -32,7 +33,11 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import java.text.DateFormat;
+import java.text.NumberFormat;
+import java.text.ParseException;
 import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -44,7 +49,8 @@ public class MainActivity extends AppCompatActivity {
     // Default quantity is 1.
     private int mInputQuantity = 1;
 
-    // TODO: Get the number format for this locale.
+    private NumberFormat numberFormat = NumberFormat.getInstance();
+    private static final String TAG = MainActivity.class.getSimpleName();
 
     // Fixed price in U.S. dollars and cents: ten cents.
     private double mPrice = 0.10;
@@ -53,7 +59,8 @@ public class MainActivity extends AppCompatActivity {
     double mFrExchangeRate = 0.93; // 0.93 euros = $1.
     double mIwExchangeRate = 3.61; // 3.61 new shekels = $1.
 
-    // TODO: Get locale's currency.
+    // Get locale's currency.
+    private NumberFormat mCurrencyFormat = NumberFormat.getCurrencyInstance();
 
     /**
      * Creates the view with a toolbar for the options menu
@@ -83,7 +90,10 @@ public class MainActivity extends AppCompatActivity {
         // Set the expiration date as the date to display.
         myDate.setTime(expirationDate);
 
-        // TODO: Format the date for the locale.
+        String myFormattedDate = DateFormat.getDateInstance().format(myDate);
+        // Display the formatted date.
+        TextView expirationDateView = (TextView) findViewById(R.id.date);
+        expirationDateView.setText(myFormattedDate);
 
         // TODO: Apply the exchange rate and calculate the price.
 
@@ -106,16 +116,45 @@ public class MainActivity extends AppCompatActivity {
                         // Don't format, leave alone.
                     } else {
 
-                        // TODO: Parse string in view v to a number.
+                        try {
+                            // Use the number format for the locale.
+                            mInputQuantity = numberFormat.parse(v.getText()
+                                    .toString()).intValue();
+                            v.setError(null);
+                        } catch (ParseException e) {
+                            Log.e(TAG, Log.getStackTraceString(e));
+                            v.setError(getText(R.string.enter_number));
+                            return false;
+                        }
 
-                        // TODO: Convert to string using locale's number format.
+                        // Convert to string using locale's number format.
+                        String myFormattedQuantity = numberFormat.format(mInputQuantity);
+                        // Show the locale-formatted quantity.
+                        v.setText(myFormattedQuantity);
 
-                        // TODO: Homework: Calculate the total amount from price and quantity.
+                        String myFormattedPrice;
+                        String deviceLocale = Locale.getDefault().getCountry();
 
-                        // TODO: Homework: Use currency format for France (FR) or Israel (IL).
+                        if (deviceLocale.equals("FR") || deviceLocale.equals("IL")) {
+                            if (deviceLocale.equals("FR")) {
+                                // Calculate mPrice in euros.
+                                mPrice *= mFrExchangeRate;
+                            } else {
+                                // Calculate mPrice in new shekels.
+                                mPrice *= mIwExchangeRate;
+                            }
+                            // Use the user-chosen locale's currency format, which
+                            // is either France or Israel.
+                            myFormattedPrice = mCurrencyFormat.format(mPrice);
+                        } else {
+                            // mPrice is the same (based on U.S. dollar).
+                            // Use the currency format for the U.S.
+                            mCurrencyFormat = NumberFormat.getCurrencyInstance(Locale.US);
+                            myFormattedPrice = mCurrencyFormat.format(mPrice);
+                        }
 
-                        // TODO: Homework: Show the total amount string.
-
+                        TextView localePrice = (TextView) findViewById(R.id.price);
+                        localePrice.setText(myFormattedPrice);
                         return true;
                     }
                 }

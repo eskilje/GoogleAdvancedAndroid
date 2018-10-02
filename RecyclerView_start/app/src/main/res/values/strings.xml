@@ -15,5 +15,7 @@ limitations under the License. -->
 
 <resources>
     <string name="app_name">RecyclerView</string>
+    <string name="clicked">Clicked!</string>
+    <string name="word">Word %1$d</string>
 </resources>
 

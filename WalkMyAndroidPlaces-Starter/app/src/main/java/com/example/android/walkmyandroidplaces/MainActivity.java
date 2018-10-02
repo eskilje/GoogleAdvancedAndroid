@@ -18,6 +18,7 @@ package com.example.android.walkmyandroidplaces;
 import android.Manifest;
 import android.animation.AnimatorInflater;
 import android.animation.AnimatorSet;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 
 import android.os.Bundle;
@@ -31,11 +32,23 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
+import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.PlaceDetectionClient;
+import com.google.android.gms.location.places.PlaceLikelihood;
+import com.google.android.gms.location.places.PlaceLikelihoodBufferResponse;
+import com.google.android.gms.location.places.Places;
+import com.google.android.gms.location.places.ui.PlacePicker;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+
+import java.util.Date;
 
 public class MainActivity extends AppCompatActivity implements
         FetchAddressTask.OnTaskCompleted {
@@ -43,9 +56,14 @@ public class MainActivity extends AppCompatActivity implements
     // Constants
     private static final int REQUEST_LOCATION_PERMISSION = 1;
     private static final String TRACKING_LOCATION_KEY = "tracking_location";
+    private static final int REQUEST_PICK_PLACE = 2;
+
+
+    private String mLastplaceName;
 
     // Views
     private Button mLocationButton;
+    private Button pickAPlaceButton;
     private TextView mLocationTextView;
     private ImageView mAndroidImageView;
 
@@ -53,9 +71,26 @@ public class MainActivity extends AppCompatActivity implements
     private boolean mTrackingLocation;
     private FusedLocationProviderClient mFusedLocationClient;
     private LocationCallback mLocationCallback;
+    private PlaceDetectionClient mPlaceDetectionClient;
 
     // Animation
     private AnimatorSet mRotateAnim;
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if(requestCode == REQUEST_PICK_PLACE) {
+            if(resultCode == RESULT_OK) {
+                Place place = PlacePicker.getPlace(this, data);
+                setAndroidType(place);
+                mLocationTextView.setText(getString(R.string.address_text, place.getName(), place.getAddress(), new Date()));
+            }
+            else {
+                mLocationTextView.setText(R.string.no_location);
+            }
+
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +98,7 @@ public class MainActivity extends AppCompatActivity implements
         setContentView(R.layout.activity_main);
 
         mLocationButton = (Button) findViewById(R.id.button_location);
+        pickAPlaceButton = (Button) findViewById(R.id.pick_a_place);
         mLocationTextView = (TextView) findViewById(R.id.textview_location);
         mAndroidImageView = (ImageView) findViewById(R.id.imageview_android);
 
@@ -70,6 +106,8 @@ public class MainActivity extends AppCompatActivity implements
         // Initialize the FusedLocationClient.
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(
                 this);
+        mPlaceDetectionClient = Places.getPlaceDetectionClient(this, null);
+
 
         // Set up the animation.
         mRotateAnim = (AnimatorSet) AnimatorInflater.loadAnimator
@@ -94,6 +132,18 @@ public class MainActivity extends AppCompatActivity implements
                     startTrackingLocation();
                 } else {
                     stopTrackingLocation();
+                }
+            }
+        });
+
+        pickAPlaceButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                PlacePicker.IntentBuilder builder = new PlacePicker.IntentBuilder();
+                try {
+                    startActivityForResult(builder.build(MainActivity.this), REQUEST_PICK_PLACE);
+                } catch (GooglePlayServicesRepairableException | GooglePlayServicesNotAvailableException e) {
+                    e.printStackTrace();
                 }
             }
         });
@@ -138,9 +188,11 @@ public class MainActivity extends AppCompatActivity implements
 
             // Set a loading text while you wait for the address to be
             // returned
-            mLocationTextView.setText(getString(R.string.address_text,
-                    getString(R.string.loading),
-                    System.currentTimeMillis()));
+            mLocationTextView.setText(
+                    getString(R.string.address_text,
+                    getString(R.string.loading),// Name
+                    getString(R.string.loading),// Address
+                    new Date())); // Timestamp
             mLocationButton.setText(R.string.stop_tracking_location);
             mRotateAnim.start();
         }
@@ -218,11 +270,41 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     @Override
-    public void onTaskCompleted(String result) {
+    public void onTaskCompleted(final String result) throws SecurityException {
         if (mTrackingLocation) {
-            // Update the UI
-            mLocationTextView.setText(getString(R.string.address_text,
-                            result, System.currentTimeMillis()));
+            Task<PlaceLikelihoodBufferResponse> placeResult = mPlaceDetectionClient.getCurrentPlace(null);
+            placeResult.addOnCompleteListener
+                    (new OnCompleteListener<PlaceLikelihoodBufferResponse>() {
+                        @Override
+                        public void onComplete(@NonNull
+                                                       Task<PlaceLikelihoodBufferResponse> task) {
+                            if (task.isSuccessful()) {
+                                PlaceLikelihoodBufferResponse likelyPlaces = task.getResult();
+                                float maxLikelihood = 0;
+                                Place currentPlace = null;
+                                for (PlaceLikelihood placeLikelihood : likelyPlaces) {
+                                    if (maxLikelihood < placeLikelihood.getLikelihood()) {
+                                        maxLikelihood = placeLikelihood.getLikelihood();
+                                        currentPlace = placeLikelihood.getPlace();
+                                    }
+                                }
+                                if (currentPlace != null) {
+                                    mLocationTextView.setText(
+                                            getString(R.string.address_text,
+                                                    currentPlace.getName(),
+                                                    result, //This is the address from the AsyncTask,
+                                                    System.currentTimeMillis()));
+                                    setAndroidType(currentPlace);
+                                }
+                                likelyPlaces.release();
+                            } else {
+                                mLocationTextView.setText(
+                                        getString(R.string.address_text,
+                                                "No Place name found!",
+                                                result, System.currentTimeMillis()));
+                            }
+                        }
+                    });
         }
     }
 
@@ -241,6 +323,31 @@ public class MainActivity extends AppCompatActivity implements
             startTrackingLocation();
         }
         super.onResume();
+    }
+
+    private void setAndroidType(Place currentPlace) {
+        int drawableID = -1;
+        for (Integer placeType : currentPlace.getPlaceTypes()) {
+            switch (placeType) {
+                case Place.TYPE_SCHOOL:
+                    drawableID = R.drawable.android_school;
+                    break;
+                case Place.TYPE_GYM:
+                    drawableID = R.drawable.android_gym;
+                    break;
+                case Place.TYPE_RESTAURANT:
+                    drawableID = R.drawable.android_restaurant;
+                    break;
+                case Place.TYPE_LIBRARY:
+                    drawableID = R.drawable.android_library;
+                    break;
+            }
+        }
+
+        if (drawableID < 0) {
+            drawableID = R.drawable.android_plain;
+        }
+        mAndroidImageView.setImageResource(drawableID);
     }
 
 }

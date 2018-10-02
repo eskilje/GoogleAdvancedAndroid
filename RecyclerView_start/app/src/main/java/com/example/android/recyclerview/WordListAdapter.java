@@ -57,7 +57,9 @@ public class WordListAdapter extends
         @Override
         public void onClick(View v) {
             // Prepend "Clicked! " to the text in the view.
-            wordItemView.setText ("Clicked! "+ wordItemView.getText());
+            String clickOutput = v.getContext().getString(R.string.clicked) +
+                    wordItemView.getText();
+            wordItemView.setText(clickOutput);
         }
     }
 

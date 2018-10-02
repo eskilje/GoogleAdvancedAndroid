@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">CustomEditText</string>
+    <string name="last_name_main_hint">Last name</string>
+</resources>
