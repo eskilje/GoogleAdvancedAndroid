@@ -23,7 +23,6 @@ public class WordViewModel extends AndroidViewModel {
 
     public void insert(Word word) {
         wordRepository.insert(word);
-
     }
 
     public void deleteWord(Word word) {
